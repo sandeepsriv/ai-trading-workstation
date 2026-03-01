@@ -1,6 +1,6 @@
-# FinAlly Backend
+# AI Trading Workstation Backend
 
-FastAPI backend for the FinAlly AI Trading Workstation.
+FastAPI backend for the AI Trading Workstation.
 
 ## Structure
 

@@ -1,10 +1,10 @@
-# FinAlly — AI Trading Workstation
+# AI Trading Workstation
 
 ## Project Specification
 
 ## 1. Vision
 
-FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
+AI Trading Workstation is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
 This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
 
@@ -175,7 +175,7 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 - Endpoint: `GET /api/stream/prices`
 - Long-lived SSE connection; client uses native `EventSource` API
-- Server pushes price updates for all tickers known to the system at a regular cadence (~500ms) — in the single-user model this is equivalent to the user's watchlist
+- Server pushes price updates for the union of watchlist tickers AND position tickers at a regular cadence (~500ms). This ensures P&L calculations remain live even if a ticker is removed from the watchlist while a position is still held.
 - Each SSE event contains ticker, price, previous price, timestamp, and change direction
 - Client handles reconnection automatically (EventSource has built-in retry)
 
@@ -193,50 +193,48 @@ The backend checks for the SQLite database on startup (or first request). If the
 
 ### Schema
 
-All tables include a `user_id` column defaulting to `"default"`. This is hardcoded for now (single-user) but enables future multi-user support without schema migration.
+This is a single-user app. No `user_id` columns — all tables are globally scoped.
 
 **users_profile** — User state (cash balance)
-- `id` TEXT PRIMARY KEY (default: `"default"`)
+- `id` TEXT PRIMARY KEY (value: `"default"`)
 - `cash_balance` REAL (default: `10000.0`)
 - `created_at` TEXT (ISO timestamp)
 
 **watchlist** — Tickers the user is watching
-- `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
-- `ticker` TEXT
+- `ticker` TEXT PRIMARY KEY
 - `added_at` TEXT (ISO timestamp)
-- UNIQUE constraint on `(user_id, ticker)`
 
-**positions** — Current holdings (one row per ticker per user)
-- `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
-- `ticker` TEXT
+**positions** — Current holdings (one row per ticker). Row is deleted when quantity reaches zero (all shares sold).
+- `ticker` TEXT PRIMARY KEY
 - `quantity` REAL (fractional shares supported)
 - `avg_cost` REAL
 - `updated_at` TEXT (ISO timestamp)
-- UNIQUE constraint on `(user_id, ticker)`
 
 **trades** — Trade history (append-only log)
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `ticker` TEXT
 - `side` TEXT (`"buy"` or `"sell"`)
 - `quantity` REAL (fractional shares supported)
 - `price` REAL
 - `executed_at` TEXT (ISO timestamp)
 
-**portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 30 seconds by a background task, and immediately after each trade execution.
+**portfolio_snapshots** — Portfolio value over time (for P&L chart). Recorded every 60 seconds by a background task, and immediately after each trade execution. Rows older than 24 hours are pruned on each write.
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `total_value` REAL
 - `recorded_at` TEXT (ISO timestamp)
 
 **chat_messages** — Conversation history with LLM
 - `id` TEXT PRIMARY KEY (UUID)
-- `user_id` TEXT (default: `"default"`)
 - `role` TEXT (`"user"` or `"assistant"`)
 - `content` TEXT
-- `actions` TEXT (JSON — trades executed, watchlist changes made; null for user messages)
+- `actions` TEXT (JSON, null for user messages) — shape:
+  ```json
+  {
+    "trades": [{"ticker": "AAPL", "side": "buy", "quantity": 10, "price": 192.5, "status": "ok"}],
+    "watchlist_changes": [{"ticker": "PYPL", "action": "add", "status": "ok"}]
+  }
+  ```
+  Each item includes a `status` field: `"ok"` or an error string if the action failed.
 - `created_at` TEXT (ISO timestamp)
 
 ### Default Seed Data
@@ -256,20 +254,22 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 ### Portfolio
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L |
+| GET | `/api/portfolio` | Current positions, cash balance, total value, unrealized P&L. Reads current prices from the live price cache; returns `null` for `current_price` and `unrealized_pnl` if a price is not yet available. |
 | POST | `/api/portfolio/trade` | Execute a trade: `{ticker, quantity, side}` |
 | GET | `/api/portfolio/history` | Portfolio value snapshots over time (for P&L chart) |
+| POST | `/api/portfolio/reset` | Reset portfolio to $10,000 cash, delete all positions and trades. Useful for demos. |
 
 ### Watchlist
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/watchlist` | Current watchlist tickers with latest prices |
+| GET | `/api/watchlist` | Current watchlist tickers with latest prices. Returns `null` for price fields if the price cache has not yet populated for a ticker. |
 | POST | `/api/watchlist` | Add a ticker: `{ticker}` |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
 
 ### Chat
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/chat/history` | Load recent chat messages for display on page load (last 50 messages) |
 | POST | `/api/chat` | Send a message, receive complete JSON response (message + executed actions) |
 
 ### System
@@ -281,7 +281,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 
 ## 9. LLM Integration
 
-When writing code to make calls to LLMs, use cerebras-inference skill to use LiteLLM via OpenRouter to the `openrouter/openai/gpt-oss-120b` model with Cerebras as the inference provider. Structured Outputs should be used to interpret the results.
+Use LiteLLM via OpenRouter with model `openrouter/openai/gpt-oss-120b` (Cerebras inference provider). Use structured outputs to parse responses.
 
 There is an OPENROUTER_API_KEY in the .env file in the project root.
 
@@ -290,12 +290,12 @@ There is an OPENROUTER_API_KEY in the .env file in the project root.
 When the user sends a chat message, the backend:
 
 1. Loads the user's current portfolio context (cash, positions with P&L, watchlist with live prices, total portfolio value)
-2. Loads recent conversation history from the `chat_messages` table
+2. Loads the last 20 messages from `chat_messages` as conversation history
 3. Constructs a prompt with a system message, portfolio context, conversation history, and the user's new message
-4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output, using the cerebras-inference skill
-5. Parses the complete structured JSON response
-6. Auto-executes any trades or watchlist changes specified in the response
-7. Stores the message and executed actions in `chat_messages`
+4. Calls the LLM via LiteLLM → OpenRouter, requesting structured output
+5. Parses the complete structured JSON response. If parsing fails, returns a generic error message to the user ("Sorry, I encountered an error. Please try again.") — no retry.
+6. Auto-executes trades and watchlist changes **best-effort**: each action is attempted independently; failures do not block subsequent actions
+7. Stores the message and executed actions (with per-action status) in `chat_messages`
 8. Returns the complete JSON response to the frontend (no token-by-token streaming — Cerebras inference is fast enough that a loading indicator is sufficient)
 
 ### Structured Output Schema
@@ -329,7 +329,7 @@ If a trade fails validation (e.g., insufficient cash), the error is included in 
 
 ### System Prompt Guidance
 
-The LLM should be prompted as "FinAlly, an AI trading assistant" with instructions to:
+The LLM should be prompted as "AI Trading Workstation, an AI trading assistant" with instructions to:
 - Analyze portfolio composition, risk concentration, and P&L
 - Suggest trades with reasoning
 - Execute trades when the user asks or agrees
@@ -352,19 +352,19 @@ When `LLM_MOCK=true`, the backend returns deterministic mock responses instead o
 
 The frontend is a single-page application with a dense, terminal-inspired layout. The specific component architecture and layout system is up to the Frontend Engineer, but the UI should include these elements:
 
-- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), daily change %, and a sparkline mini-chart (accumulated from SSE since page load)
+- **Watchlist panel** — grid/table of watched tickers with: ticker symbol, current price (flashing green/red on change), change % from seed price labeled "Chg%" (not "daily" — the simulator has no true daily open), and a sparkline mini-chart (accumulated from SSE since page load; intentionally reset on refresh)
 - **Main chart area** — larger chart for the currently selected ticker, with at minimum price over time. Clicking a ticker in the watchlist selects it here.
 - **Portfolio heatmap** — treemap visualization where each rectangle is a position, sized by portfolio weight, colored by P&L (green = profit, red = loss)
 - **P&L chart** — line chart showing total portfolio value over time, using data from `portfolio_snapshots`
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
-- **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
+- **Trade bar** — simple input area: ticker field (auto-filled when a watchlist ticker is clicked), quantity field, buy button, sell button. Market orders, instant fill.
 - **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
 - **Header** — portfolio total value (updating live), connection status indicator, cash balance
 
 ### Technical Notes
 
 - Use `EventSource` for SSE connection to `/api/stream/prices`
-- Canvas-based charting library preferred (Lightweight Charts or Recharts) for performance
+- Use **Lightweight Charts** (by TradingView) for all charts — canvas-based, built for financial data, better performance than SVG alternatives
 - Price flash effect: on receiving a new price, briefly apply a CSS class with background color transition, then remove it
 - All API calls go to the same origin (`/api/*`) — no CORS configuration needed
 - Tailwind CSS for styling with a custom dark theme
@@ -375,10 +375,12 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 
 ### Multi-Stage Dockerfile
 
+A `.dockerignore` file must exist at the project root excluding `node_modules`, `.git`, `db/finally.db`, and `__pycache__` to keep the build context small.
+
 ```
 Stage 1: Node 20 slim
   - Copy frontend/
-  - npm install && npm run build (produces static export)
+  - npm ci && npm run build (produces static export)
 
 Stage 2: Python 3.12 slim
   - Install uv
@@ -403,17 +405,18 @@ The `db/` directory in the project root maps to `/app/db` in the container. The 
 
 ### Start/Stop Scripts
 
-**`scripts/start_mac.sh`** (macOS/Linux):
+**`scripts/start_mac.sh`** (macOS only):
+- Checks that `.env` exists; prints an error and exits if not
 - Builds the Docker image if not already built (or if `--build` flag passed)
 - Runs the container with the volume mount, port mapping, and `.env` file
 - Prints the URL to access the app
-- Optionally opens the browser
+- Opens the browser using `open` (macOS-specific)
 
-**`scripts/stop_mac.sh`** (macOS/Linux):
+**`scripts/stop_mac.sh`** (macOS only):
 - Stops and removes the running container
 - Does NOT remove the volume (data persists)
 
-**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows.
+**`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows. Use `Start-Process` to open the browser.
 
 All scripts should be idempotent — safe to run multiple times.
 
@@ -454,3 +457,32 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 - Portfolio visualization: heatmap renders with correct colors, P&L chart has data points
 - AI chat (mocked): send a message, receive a response, trade execution appears inline
 - SSE resilience: disconnect and verify reconnection
+
+---
+
+## 13. Review Notes
+
+All questions and simplifications from the initial review have been resolved and incorporated into the plan above. For reference, the changes made were:
+
+| Topic | Decision |
+|-------|----------|
+| `user_id` columns | Removed — single-user app, no boilerplate |
+| Watchlist / Positions PK | `ticker` is the primary key; UUID removed |
+| Snapshot frequency | 60s (was 30s); pruned after 24 hours |
+| Charting library | Lightweight Charts (explicit) |
+| Trade bar auto-fill | Ticker auto-fills from watchlist click |
+| `npm install` → `npm ci` | Done in Dockerfile |
+| `.dockerignore` | Required — documented in §11 |
+| Start scripts platform | Renamed to macOS-only; `.env` check added |
+| "Daily change %" label | Renamed to "Chg%" from simulator seed price |
+| Sparklines on refresh | Intentional reset — documented in §10 |
+| SSE ticker scope | Streams watchlist ∪ position tickers |
+| `GET /api/chat/history` | Added to API endpoints (last 50 messages) |
+| `POST /api/portfolio/reset` | Added to API endpoints |
+| Price cache not ready | Endpoints return `null` for price fields |
+| LLM history limit | Last 20 messages |
+| Multi-trade failure | Best-effort: each action independent |
+| Structured output failure | Return generic error string to user |
+| LLM model reference | Direct LiteLLM call; "skill" reference removed |
+| `chat_messages.actions` shape | Defined explicitly in §7 with `status` per action |
+| Positions at zero quantity | Row deleted |

@@ -1,6 +1,6 @@
 # Market Data Backend — Detailed Design
 
-Implementation-ready design for the FinAlly market data subsystem. Covers the unified interface, in-memory price cache, GBM simulator, Massive API client, SSE streaming endpoint, and FastAPI lifecycle integration.
+Implementation-ready design for the  AI Trading Workstation market data subsystem. Covers the unified interface, in-memory price cache, GBM simulator, Massive API client, SSE streaming endpoint, and FastAPI lifecycle integration.
 
 Everything in this document lives under `backend/app/market/`.
 
@@ -1008,7 +1008,7 @@ async def lifespan(app: FastAPI):
     await source.stop()
 
 
-app = FastAPI(title="FinAlly", lifespan=lifespan)
+app = FastAPI(title=" AI Trading Workstation", lifespan=lifespan)
 
 
 # Dependency for injecting the price cache into route handlers
@@ -1464,7 +1464,7 @@ All tunable parameters and their defaults:
 **File: `backend/app/market/__init__.py`**
 
 ```python
-"""Market data subsystem for FinAlly.
+"""Market data subsystem for  AI Trading Workstation.
 
 Public API:
     PriceUpdate         - Immutable price snapshot dataclass

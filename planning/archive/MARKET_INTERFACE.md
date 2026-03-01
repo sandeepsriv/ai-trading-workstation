@@ -1,6 +1,6 @@
 # Market Data Interface Design
 
-Unified Python interface for market data in FinAlly. Two implementations (simulator and Massive API) behind one abstract interface. All downstream code — SSE streaming, price cache, portfolio valuation — is source-agnostic.
+Unified Python interface for market data in AI Trading Workstation. Two implementations (simulator and Massive API) behind one abstract interface. All downstream code — SSE streaming, price cache, portfolio valuation — is source-agnostic.
 
 ## Core Data Model
 

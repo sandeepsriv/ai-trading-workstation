@@ -1,1 +1,1 @@
-"""Tests for FinAlly backend."""
+"""Tests for AI Trading Workstation backend."""

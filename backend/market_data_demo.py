@@ -1,4 +1,4 @@
-"""FinAlly Market Data Simulator Demo.
+"""AI Trading Workstation Market Data Simulator Demo.
 
 Run with:  uv run market_data_demo.py
 
@@ -137,7 +137,7 @@ def build_dashboard(
 
     # Header
     header_text = Text.assemble(
-        ("  FinAlly ", "bold bright_yellow"),
+        ("  AI Trading Workstation ", "bold bright_yellow"),
         ("Market Data Simulator", "bold bright_white"),
         ("  |  ", "bright_black"),
         (f"{elapsed:5.1f}s elapsed", "bright_cyan"),
@@ -169,7 +169,7 @@ def print_summary(cache: PriceCache) -> None:
     """Print final summary comparing to seed prices."""
     console = Console()
     console.print()
-    console.print("[bold bright_yellow]  FinAlly[/] [bold]Session Summary[/]")
+    console.print("[bold bright_yellow]  AI Trading Workstation[/] [bold]Session Summary[/]")
     console.print()
 
     table = Table(border_style="bright_black", header_style="bold bright_white", expand=False)

@@ -1,4 +1,4 @@
-"""Market data subsystem for FinAlly.
+"""Market data subsystem for AI Trading Workstation.
 
 Public API:
     PriceUpdate         - Immutable price snapshot dataclass

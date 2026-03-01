@@ -1,6 +1,6 @@
 # Massive API Reference (formerly Polygon.io)
 
-Reference documentation for the Massive (formerly Polygon.io) REST API as used in FinAlly.
+Reference documentation for the Massive (formerly Polygon.io) REST API as used in  AI Trading Workstation.
 
 ## Overview
 
@@ -17,7 +17,7 @@ Reference documentation for the Massive (formerly Polygon.io) REST API as used i
 | Free | 5 requests/minute |
 | Paid (all tiers) | Unlimited (recommended: stay under 100 req/s) |
 
-For FinAlly, we poll on a timer. Free tier: poll every 15s. Paid: poll every 2-5s.
+For  AI Trading Workstation, we poll on a timer. Free tier: poll every 15s. Paid: poll every 2-5s.
 
 ## Client Initialization
 
@@ -31,7 +31,7 @@ client = RESTClient()
 client = RESTClient(api_key="your_key_here")
 ```
 
-## Endpoints Used in FinAlly
+## Endpoints Used in  AI Trading Workstation
 
 ### 1. Snapshot — All Tickers (Primary Endpoint)
 
@@ -198,7 +198,7 @@ print(f"Bid: ${quote.bid} x {quote.bid_size}")
 print(f"Ask: ${quote.ask} x {quote.ask_size}")
 ```
 
-## How FinAlly Uses the API
+## How  AI Trading Workstation Uses the API
 
 The Massive poller runs as a background task:
 

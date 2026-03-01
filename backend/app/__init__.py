@@ -1,1 +1,1 @@
-"""FinAlly backend application."""
+"""AI Trading Workstation backend application."""
